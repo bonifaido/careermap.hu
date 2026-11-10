@@ -1,0 +1,74 @@
+name: Deploy English site to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout English site configuration
+        uses: actions/checkout@v4
+
+      - name: Checkout shared application
+        uses: actions/checkout@v4
+        with:
+          repository: bonifaido/palyaterkep.hu
+          ref: main
+          path: app
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: app
+
+      - name: Test
+        run: npm test
+        working-directory: app
+
+      - name: Build English site
+        run: npm run build
+        working-directory: app
+        env:
+          VITE_SITE_LOCALE: en
+
+      - name: Copy custom domain
+        run: cp CNAME app/dist/CNAME
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: app/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
